@@ -92,3 +92,11 @@ th.sync__action{
 	width: 3%;
 }
 
+
+div.dokuwiki form.sync_profile fieldset div.readonly {
+    margin-left: 2em;
+    margin-top: 0.5em;
+}
+div.dokuwiki form.sync_profile fieldset div.readonly label {
+    display: inline;
+}

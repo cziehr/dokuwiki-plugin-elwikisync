@@ -17,31 +17,60 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function __construct(){
         $this->_profileLoad();
-        $this->profno = preg_replace('/[^0-9]+/','',$_REQUEST['no']);
+        $this->profno = preg_replace('/[^0-9]+/', '', (string) ($_REQUEST['no'] ?? ''));
+        // ignore profile numbers that do not exist (e.g. after deleting a profile)
+        if($this->profno !== '' && !isset($this->profiles[$this->profno]) && !isset($_REQUEST['prf'])){
+            $this->profno = '';
+        }
+    }
+
+    /**
+     * Get a single value of the current (or given) profile
+     *
+     * @param string $key
+     * @param mixed $default
+     * @param string|int|null $no profile number, defaults to the current profile
+     * @return mixed
+     */
+    protected function _prf($key, $default = '', $no = null){
+        if($no === null) $no = $this->profno;
+        if($no === '' || !isset($this->profiles[$no]) || !is_array($this->profiles[$no])) return $default;
+        return $this->profiles[$no][$key] ?? $default;
+    }
+
+    /**
+     * Flush output buffers without triggering a notice when there is no buffer
+     */
+    protected function _flush(){
+        if(ob_get_level() > 0) @ob_flush();
+        flush();
     }
 
     function _connect(){
         if(!is_null($this->client)) return true;
+        if($this->profno === '' || !isset($this->profiles[$this->profno])) return false;
 
-        if ( isset($this->profiles[$this->profno]['timeout']) ){
-          $timeout = (int) $this->profiles[$this->profno]['timeout'];
+        $timeout = $this->_prf('timeout', '');
+        if(is_numeric($timeout)){
+            $timeout = (int) $timeout;
         } else {
-          $timeout = $this->defaultTimeout;
+            $timeout = $this->defaultTimeout;
         }
 
+        $server = $this->_prf('server');
         if(class_exists('IXR_Client')) {
-            $this->client = new IXR_Client($this->profiles[$this->profno]['server'], false, 80, $timeout);
+            $this->client = new IXR_Client($server, false, 80, $timeout);
         }
         else {
-            $this->client = new dokuwiki\Remote\IXR\Client($this->profiles[$this->profno]['server']);
+            $this->client = new dokuwiki\Remote\IXR\Client($server);
             $this->client->timeout = $timeout;
         }
 
         // do the login
-        if($this->profiles[$this->profno]['user']){
+        if($this->_prf('user') !== ''){
             $ok = $this->client->query('dokuwiki.login',
-                    $this->profiles[$this->profno]['user'],
-                    $this->profiles[$this->profno]['pass']
+                    $this->_prf('user'),
+                    $this->_prf('pass')
                   );
             if(!$ok){
                 msg($this->getLang('xmlerr').' '.hsc($this->client->getErrorMessage()),-1);
@@ -88,13 +117,18 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
                 unset($this->profiles[$this->profno]);
                 $this->profiles = array_values($this->profiles); //reindex
                 $this->profno = '';
+            }elseif(isset($_REQUEST['sync__delete'])){
+                // delete clicked on the "new profile" form - nothing to do
+                return;
             }else{
                 // add/edit profile
                 if($this->profno === '') $this->profno = count($this->profiles);
-                if ( !isset($_REQUEST['prf']['timeout']) || !is_numeric($_REQUEST['prf']['timeout']) ){
-                  $_REQUEST['prf']['timeout'] = $this->defaultTimeout;
+                $prf = $_REQUEST['prf'];
+                if ( !isset($prf['timeout']) || !is_numeric($prf['timeout']) ){
+                  $prf['timeout'] = $this->defaultTimeout;
                 }
-                $this->profiles[$this->profno] = $_REQUEST['prf'];
+                // note: resaving intentionally resets the sync times (see 'changewarn')
+                $this->profiles[$this->profno] = $prf;
             }
             $this->_profileSave();
 
@@ -107,7 +141,10 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      * output appropriate html
      */
     function html() {
-        if(($_POST['sync_pages'] || $_POST['sync_media']) && $this->profno!==''){
+        $syncPages = (isset($_POST['sync_pages']) && is_array($_POST['sync_pages'])) ? $_POST['sync_pages'] : array();
+        $syncMedia = (isset($_POST['sync_media']) && is_array($_POST['sync_media'])) ? $_POST['sync_media'] : array();
+
+        if((count($syncPages) || count($syncMedia)) && $this->profno!==''){
             // do the sync
             echo $this->locale_xhtml('sync');
 
@@ -117,19 +154,18 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             echo 'showLoadBar();'.NL;
             echo '//--><!]]></script>'.NL;
             echo '<br /></div>'.NL;
-            flush();
-            ob_flush();
+            $this->_flush();
 
             echo '<ul class="sync">';
 
-            if($_POST['sync_pages']){
-                $this->_sync($_POST['sync_pages'],'pages');
+            if(count($syncPages)){
+                $this->_sync($syncPages,'pages');
             }
-            if($_POST['sync_media']){
-                $this->_sync($_POST['sync_media'],'media');
+            if(count($syncMedia)){
+                $this->_sync($syncMedia,'media');
             }
-            $this->_saveSyncTimes((int) $_POST['lnow'],
-                                 (int) $_POST['rnow']);
+            $this->_saveSyncTimes((int) ($_POST['lnow'] ?? 0),
+                                 (int) ($_POST['rnow'] ?? 0));
 
             echo '</ul>';
 
@@ -137,24 +173,21 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             echo '<script type="text/javascript" charset="utf-8"><!--//--><![CDATA[//><!--'.NL;
             echo 'hideLoadBar("dw__loading");'.NL;
             echo '//--><!]]></script>'.NL;
-            flush();
-            ob_flush();
+            $this->_flush();
 
 
             echo '<p>'.$this->getLang('syncdone').'</p>';
-        }elseif($_REQUEST['startsync'] && $this->profno!==''){
+        }elseif(!empty($_REQUEST['startsync']) && $this->profno!==''){
             // get sync list
             list($lnow,$rnow) = $this->_getTimes();
             $pages = array();
             $media = array();
+            $type = (int) $this->_prf('type', 0);
             if($rnow){
-                if($this->profiles[$this->profno]['type'] == 0 ||
-                   $this->profiles[$this->profno]['type'] == 1){
+                if($type == 0 || $type == 1){
                     $pages = $this->_getSyncList('pages');
                 }
-                if(($this->profiles[$this->profno]['type'] == 0 ||
-                   $this->profiles[$this->profno]['type'] == 2)
-                    && $pages !== false ){
+                if(($type == 0 || $type == 2) && $pages !== false ){
                     $media = $this->_getSyncList('media');
                 }
             }
@@ -195,9 +228,18 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function _profileLoad(){
         global $conf;
+        $this->profiles = array();
         $profiles = $conf['metadir'].'/sync.profiles';
         if(file_exists($profiles)){
-            $this->profiles = unserialize(io_readFile($profiles,false));
+            // a serialized array always ends with "}" - trailing whitespace
+            // (e.g. a newline added by an editor) would make unserialize() complain
+            $raw  = rtrim((string) io_readFile($profiles,false));
+            $data = ($raw === '') ? array() : @unserialize($raw, array('allowed_classes' => false));
+            if(is_array($data)){
+                $this->profiles = $data;
+            }else{
+                msg('sync plugin: could not read '.hsc($profiles).' - file is damaged',-1);
+            }
         }
     }
 
@@ -216,7 +258,6 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
     function _profileView(){
         if(!$this->_connect()) return false;
 
-        global $conf;
         $no = $this->profno;
 
         $ok = $this->client->query('dokuwiki.getVersion');
@@ -228,8 +269,12 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         echo '<fieldset><legend>'.$this->getLang('syncstart').'</legend>';
         if($version){
             echo '<p>'.$this->getLang('remotever').' '.hsc($version).'</p>';
-            if($this->profiles[$no]['ltime']){
-                echo '<p>'.$this->getLang('lastsync').' '.strftime($conf['dformat'],$this->profiles[$no]['ltime']).'</p>';
+            if($this->_isReadonly()){
+                echo '<p><strong>'.$this->getLang('readonly').'</strong></p>';
+            }
+            $ltime = (int) $this->_prf('ltime', 0);
+            if($ltime){
+                echo '<p>'.$this->getLang('lastsync').' '.hsc(dformat($ltime)).'</p>';
             }else{
                 echo '<p>'.$this->getLang('neversync').'</p>';
             }
@@ -239,6 +284,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         }
         echo '</fieldset>';
         echo '</form>';
+        return true;
     }
 
     /**
@@ -250,13 +296,18 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         echo '<select name="no" class="edit">';
         echo '  <option value="">'.$this->getLang('newprofile').'</option>';
         foreach($this->profiles as $pno => $opts){
-            $srv = parse_url($opts['server']);
+            if(!is_array($opts)) continue;
+            $srv  = parse_url((string) ($opts['server'] ?? ''));
+            $host = is_array($srv) ? ($srv['host'] ?? '') : '';
+            $user = (string) ($opts['user'] ?? '');
+            $ns   = (string) ($opts['ns'] ?? '');
 
             echo '<option value="'.hsc($pno).'" '.(($no!=='' && $pno == $no)?'selected="selected"':'').'>';
             echo ($pno+1).'. ';
-            if($opts['user']) echo hsc($opts['user']).'@';
-            echo hsc($srv['host']);
-            if($opts['ns']) echo ':'.hsc($opts['ns']);
+            if($user !== '') echo hsc($user).'@';
+            echo hsc($host);
+            if($ns !== '') echo ':'.hsc($ns);
+            if(!empty($opts['readonly'])) echo ' ('.$this->getLang('readonlyshort').')';
             echo '</option>';
         }
         echo '</select>';
@@ -269,6 +320,16 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      * Form to edit or create a sync profile
      */
     function _profileform($no=''){
+        $server  = (string) $this->_prf('server', '', $no);
+        $ns      = (string) $this->_prf('ns', '', $no);
+        $depth   = (int) $this->_prf('depth', 0, $no);
+        $user    = (string) $this->_prf('user', '', $no);
+        $pass    = (string) $this->_prf('pass', '', $no);
+        $timeout = $this->_prf('timeout', $this->defaultTimeout, $no);
+        $type    = (int) $this->_prf('type', 0, $no);
+        $ltime   = (int) $this->_prf('ltime', 0, $no);
+        $readonly = $this->_isReadonly($no);
+
         echo '<form action="" method="post" class="sync_profile">';
         echo '<fieldset><legend>';
         if($no !== ''){
@@ -281,94 +342,128 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         echo '<input type="hidden" name="no" value="'.hsc($no).'" />';
 
         echo '<label for="sync__server">'.$this->getLang('server').'</label> ';
-        echo '<input type="text" name="prf[server]" id="sync__server" class="edit" value="'.hsc($this->profiles[$no]['server']).'" />';
+        echo '<input type="text" name="prf[server]" id="sync__server" class="edit" value="'.hsc($server).'" />';
         echo '<samp>http://example.com/dokuwiki/lib/exe/xmlrpc.php</samp>';
 
         echo '<label for="sync__ns">'.$this->getLang('ns').'</label> ';
-        echo '<input type="text" name="prf[ns]" id="sync__ns" class="edit" value="'.hsc($this->profiles[$no]['ns']).'" />';
+        echo '<input type="text" name="prf[ns]" id="sync__ns" class="edit" value="'.hsc($ns).'" />';
 
         echo '<label for="sync__depth">'.$this->getLang('depth').'</label> ';
         echo '<select name="prf[depth]" id="sync__depth" class="edit">';
-        echo '<option value="0" '.(($this->profiles[$no]['depth']==0)?'selected="selected"':'').'>'.$this->getLang('level0').'</option>';
-        echo '<option value="1" '.(($this->profiles[$no]['depth']==1)?'selected="selected"':'').'>'.$this->getLang('level1').'</option>';
-        echo '<option value="2" '.(($this->profiles[$no]['depth']==2)?'selected="selected"':'').'>'.$this->getLang('level2').'</option>';
-        echo '<option value="3" '.(($this->profiles[$no]['depth']==3)?'selected="selected"':'').'>'.$this->getLang('level3').'</option>';
+        for($i = 0; $i <= 3; $i++){
+            echo '<option value="'.$i.'" '.(($depth == $i)?'selected="selected"':'').'>'.$this->getLang('level'.$i).'</option>';
+        }
         echo '</select>';
 
 
         echo '<label for="sync__user">'.$this->getLang('user').'</label> ';
-        echo '<input type="text" name="prf[user]" id="sync__user" class="edit" value="'.hsc($this->profiles[$no]['user']).'" />';
+        echo '<input type="text" name="prf[user]" id="sync__user" class="edit" value="'.hsc($user).'" />';
 
         echo '<label for="sync__pass">'.$this->getLang('pass').'</label> ';
-        echo '<input type="password" name="prf[pass]" id="sync__pass" class="edit" value="'.hsc($this->profiles[$no]['pass']).'" />';
+        echo '<input type="password" name="prf[pass]" id="sync__pass" class="edit" value="'.hsc($pass).'" />';
 
         echo '<label for="sync__timeout">'.$this->getLang('timeout').'</label>';
-        echo '<input type="number" name="prf[timeout]" id="sync__timeout" class="edit" value="'.hsc($this->profiles[$no]['timeout']).'" />';
+        echo '<input type="number" name="prf[timeout]" id="sync__timeout" class="edit" value="'.hsc((string) $timeout).'" />';
 
         echo '<span>'.$this->getLang('type').'</span>';
 
         echo '<div class="type">';
-        echo '<input type="radio" name="prf[type]" id="sync__type0" value="0" '.(($this->profiles[$no]['type'] == 0)?'checked="checked"':'').'/>';
-        echo '<label for="sync__type0">'.$this->getLang('type0').'</label> ';
+        for($i = 0; $i <= 2; $i++){
+            echo '<input type="radio" name="prf[type]" id="sync__type'.$i.'" value="'.$i.'" '.(($type == $i)?'checked="checked"':'').'/>';
+            echo '<label for="sync__type'.$i.'">'.$this->getLang('type'.$i).'</label> ';
+        }
+        echo '</div>';
 
-        echo '<input type="radio" name="prf[type]" id="sync__type1" value="1" '.(($this->profiles[$no]['type'] == 1)?'checked="checked"':'').'/>';
-        echo '<label for="sync__type1">'.$this->getLang('type1').'</label> ';
-
-        echo '<input type="radio" name="prf[type]" id="sync__type2" value="2" '.(($this->profiles[$no]['type'] == 2)?'checked="checked"':'').'/>';
-        echo '<label for="sync__type2">'.$this->getLang('type2').'</label> ';
+        echo '<div class="readonly">';
+        echo '<input type="checkbox" name="prf[readonly]" id="sync__readonly" value="1" '.($readonly?'checked="checked"':'').'/>';
+        echo '<label for="sync__readonly">'.$this->getLang('readonly').'</label>';
+        echo '<small>'.$this->getLang('readonlyinfo').'</small>';
         echo '</div>';
 
 
         echo '<div class="submit">';
         echo '<input type="submit" value="'.$this->getLang('save').'" class="button" />';
-        if($no !== '' && $this->profiles[$no]['ltime']){
+        if($no !== '' && $ltime){
             echo '<small>'.$this->getLang('changewarn').'</small>';
         }
         echo '</div>';
 
-        echo '<div class="submit">';
-        echo '<input name="sync__delete" type="submit" value="'.$this->getLang('delete').'" class="button" />';
-        echo '</div>';
+        if($no !== ''){
+            echo '<div class="submit">';
+            echo '<input name="sync__delete" type="submit" value="'.$this->getLang('delete').'" class="button" />';
+            echo '</div>';
+        }
 
         echo '</fieldset>';
         echo '</form>';
     }
 
     /**
+     * Is the current profile in read-only mode (pull only, never write to the remote wiki)?
+     */
+    protected function _isReadonly($no = null){
+        return (bool) $this->_prf('readonly', 0, $no);
+    }
+
+    /**
      * Lock files that will be modified on either side.
+     *
+     * Files are always locked locally (any direction may change the local wiki
+     * or at least reads it). Remote locks are only requested for files that are
+     * actually written to the remote wiki (push / remote delete). Pulling only
+     * needs read access, so a read-only remote account works fine.
      *
      * Lock fails are printed and removed from synclist
      *
-     * @returns list of locked files
+     * @returns array (local locks, remote locks)
      */
     function _lockFiles(&$synclist){
-        if(!$this->_connect()) return array();
-        // lock the files
+        if(!$this->_connect()) return array(array(), array());
+        $readonly = $this->_isReadonly();
+
+        // lock the files locally
         $lock = array();
+        $remotelock = array();
         foreach((array) $synclist as $id => $dir){
+            $dir = (int) $dir;
             if($dir == 0) continue;
+            if($readonly && $dir > 0) continue; // will be skipped in _sync()
             if(checklock($id)){
-                $this->_listOut($this->getLang('lockfail').' '.hsc($id),'error');
+                $this->_listOut($this->getLang('lockfail').' '.$id,'error');
                 unset($synclist[$id]);
             }else{
                 lock($id); // lock local
                 $lock[] = $id;
+                if($dir > 0) $remotelock[] = $id;
             }
         }
-        // lock remote files
-        $ok = $this->client->query('dokuwiki.setLocks',array('lock'=>$lock,'unlock'=>array()));
+
+        // lock remote files - only those we are going to write remotely
+        if(!count($remotelock)) return array($lock, array());
+
+        $ok = $this->client->query('dokuwiki.setLocks',array('lock'=>$remotelock,'unlock'=>array()));
         if(!$ok){
-            $this->_listOut('failed RPC communication');
-            $synclist = array();
-            return array();
+            // remote locking failed: skip all remote write operations, but keep pulls
+            $this->_listOut('failed RPC communication: '.$this->client->getErrorMessage(),'error');
+            foreach($remotelock as $id){
+                $this->_listOut($this->getLang('lockfail').' '.$id,'error');
+                unset($synclist[$id]);
+                unlock($id);
+            }
+            $lock = array_values(array_diff($lock, $remotelock));
+            return array($lock, array());
         }
         $data = $this->client->getResponse();
-        foreach((array) $data['lockfail'] as $id){
-            $this->_listOut($this->getLang('lockfail').' '.hsc($id),'error');
+        $lockfail = (is_array($data) && isset($data['lockfail'])) ? (array) $data['lockfail'] : array();
+        foreach($lockfail as $id){
+            $this->_listOut($this->getLang('lockfail').' '.$id,'error');
             unset($synclist[$id]);
+            unlock($id);
         }
+        $lock       = array_values(array_diff($lock, $lockfail));
+        $remotelock = array_values(array_diff($remotelock, $lockfail));
 
-        return $lock;
+        return array($lock, $remotelock);
     }
 
     /**
@@ -378,8 +473,16 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         echo '<li class="'.hsc($class).'"><div class="li">';
         echo hsc($msg);
         echo "</div></li>\n";
-        flush();
-        ob_flush();
+        $this->_flush();
+    }
+
+    /**
+     * Create a Base64 object for the XML-RPC request
+     * (class name differs between DokuWiki releases)
+     */
+    protected function _base64($data){
+        if(class_exists('IXR_Base64')) return new IXR_Base64($data);
+        return new \IXR\DataType\Base64($data);
     }
 
     /**
@@ -387,17 +490,26 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function _sync(&$synclist,$type){
         if(!$this->_connect()) return false;
-        $no = $this->profno;
-        $sum = $_REQUEST['sum'];
+        $sum = (string) ($_REQUEST['sum'] ?? '');
+        $readonly = $this->_isReadonly();
+        $lock = array();
+        $remotelock = array();
 
         if($type == 'pages')
-            $lock = $this->_lockfiles($synclist);
+            list($lock, $remotelock) = $this->_lockFiles($synclist);
 
         // do the sync
         foreach((array) $synclist as $id => $dir){
+            $id  = (string) $id;
+            $dir = (int) $dir;
             @set_time_limit(30);
             if($dir == 0){
                 $this->_listOut($this->getLang('skipped').' '.$id,'skipped');
+                continue;
+            }
+            if($readonly && $dir > 0){
+                // never write to the remote wiki in read-only mode
+                $this->_listOut($this->getLang('readonlyskip').' '.$id,'skipped');
                 continue;
             }
             if($dir == -2){
@@ -406,7 +518,8 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
                     saveWikiText($id,'',$sum,false);
                     $this->_listOut($this->getLang('localdelok').' '.$id,'del_okay');
                 }else{
-                    if(unlink(mediaFN($id))){
+                    $file = mediaFN($id);
+                    if(file_exists($file) && @unlink($file)){
                         $this->_listOut($this->getLang('localdelok').' '.$id,'del_okay');
                     }else{
                         $this->_listOut($this->getLang('localdelfail').' '.$id,'del_fail');
@@ -428,11 +541,11 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
                 }
                 $data = $this->client->getResponse();
                 if($type == 'pages'){
-                    saveWikiText($id,$data,$sum,false);
+                    saveWikiText($id,(string) $data,$sum,false);
                     idx_addPage($id);
                 }else{
                     if($this->apiversion < 7){
-                        $data = base64_decode($data);
+                        $data = base64_decode((string) $data);
                     }
                     io_saveFile(mediaFN($id),$data);
                 }
@@ -449,7 +562,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
                     if($this->apiversion < 6){
                         $data = base64_encode($data);
                     }else{
-                        $data = new IXR_Base64($data);
+                        $data = $this->_base64($data);
                     }
                     $ok = $this->client->query('wiki.putAttachment',$id,$data,array('ow'=>true));
                 }
@@ -480,13 +593,15 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
 
         // unlock
         if($type == 'pages'){
-            foreach((array) $synclist as $id => $dir){
+            foreach($lock as $id){
                 unlock($id);
             }
-            $this->client->query('dokuwiki.setLocks',array('lock'=>array(),'unlock'=>$lock));
+            if(count($remotelock)){
+                $this->client->query('dokuwiki.setLocks',array('lock'=>array(),'unlock'=>$remotelock));
+            }
         }
 
-
+        return true;
     }
 
     /**
@@ -494,6 +609,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function _saveSyncTimes($ltime,$rtime){
         $no = $this->profno;
+        if($no === '' || !isset($this->profiles[$no])) return;
         list($letime,$retime) = $this->_getTimes();
         $this->profiles[$no]['ltime'] = $ltime;
         $this->profiles[$no]['rtime'] = $rtime;
@@ -509,10 +625,10 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         $no = $this->profno;
         echo $this->locale_xhtml('list');
         echo '<form action="" method="post">';
+        echo '<input type="hidden" name="lnow" value="'.hsc((string) $lnow).'" />';
+        echo '<input type="hidden" name="rnow" value="'.hsc((string) $rnow).'" />';
+        echo '<input type="hidden" name="no" value="'.hsc((string) $no).'" />';
         echo '<table class="inline" id="sync__direction__table">';
-        echo '<input type="hidden" name="lnow" value="'.$lnow.'" />';
-        echo '<input type="hidden" name="rnow" value="'.$rnow.'" />';
-        echo '<input type="hidden" name="no" value="'.$no.'" />';
         echo '<tr>
                 <th class="sync__file">'.$this->getLang('file').'</th>
                 <th class="sync__local">'.$this->getLang('local').'</th>
@@ -542,78 +658,88 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      * Tries to be clever about suggesting the direction
      */
     function _directionForm($type,&$synclist){
-        global $conf;
-        global $lang;
         $no = $this->profno;
 
-        $ltime = (int) $this->profiles[$no]['ltime'];
-        $rtime = (int) $this->profiles[$no]['rtime'];
-        $letime = (int) $this->profiles[$no]['letime'];
-        $retime = (int) $this->profiles[$no]['retime'];
+        $ltime  = (int) $this->_prf('ltime', 0);
+        $rtime  = (int) $this->_prf('rtime', 0);
+        $letime = (int) $this->_prf('letime', 0);
+        $retime = (int) $this->_prf('retime', 0);
+        $readonly = $this->_isReadonly();
 
         foreach($synclist as $id => $item){
+            $hasLocal  = isset($item['local']);
+            $hasRemote = isset($item['remote']);
+            $lmtime = $hasLocal  ? (int) ($item['local']['mtime'] ?? 0)  : 0;
+            $rmtime = $hasRemote ? (int) ($item['remote']['mtime'] ?? 0) : 0;
+
             // check direction
             $dir = 0;
             if($ltime && $rtime){ // synced before
-                if($item['remote']['mtime'] > $rtime &&
-                   $item['local']['mtime'] <= $letime){
+                if($rmtime > $rtime &&
+                   $lmtime <= $letime){
                     $dir = -1;
                 }
-                if($item['remote']['mtime'] <= $retime &&
-                   $item['local']['mtime'] > $ltime){
+                if($rmtime <= $retime &&
+                   $lmtime > $ltime){
                     $dir = 1;
                 }
             }else{ // never synced
-                if(!$item['local']['mtime'] && $item['remote']['mtime']){
+                if(!$lmtime && $rmtime){
                     $dir = -1;
                 }
-                if($item['local']['mtime'] && !$item['remote']['mtime']){
+                if($lmtime && !$rmtime){
                     $dir = 1;
                 }
             }
+            // read-only: never suggest writing to the remote wiki
+            if($readonly && $dir > 0) $dir = 0;
+
+            $fieldname = 'sync_'.$type.'['.hsc($id).']';
 
             echo '<tr>';
 
             echo '<td class="sync__file">'.hsc($id).'</td>';
             echo '<td class="sync__local">';
-            if(!isset($item['local'])){
+            if(!$hasLocal){
                 echo '&mdash;';
             }else{
-                echo '<div>'.strftime($conf['dformat'],$item['local']['mtime']).'</div>';
-                echo ' <div>('.$item['local']['size'].' bytes)</div>';
+                echo '<div>'.hsc(dformat($lmtime)).'</div>';
+                echo ' <div>('.(int) ($item['local']['size'] ?? 0).' bytes)</div>';
             }
             echo '</td>';
 
             echo '<td class="sync__push">';
-            if(!isset($item['local'])){
-                echo '<input type="radio" name="sync_'.$type.'['.hsc($id).']" value="2" class="syncpush" title="'.$this->getLang('pushdel').'" '.(($dir == 2)?'checked="checked"':'').' />';
+            if($readonly){
+                echo '<span title="'.hsc($this->getLang('readonly')).'">&ndash;</span>';
+            }elseif(!$hasLocal){
+                echo '<input type="radio" name="'.$fieldname.'" value="2" class="syncpush" title="'.$this->getLang('pushdel').'" '.(($dir == 2)?'checked="checked"':'').' />';
             }else{
-                echo '<input type="radio" name="sync_'.$type.'['.hsc($id).']" value="1" class="syncpush" title="'.$this->getLang('push').'" '.(($dir == 1)?'checked="checked"':'').' />';
+                echo '<input type="radio" name="'.$fieldname.'" value="1" class="syncpush" title="'.$this->getLang('push').'" '.(($dir == 1)?'checked="checked"':'').' />';
             }
             echo '</td>';
             echo '<td class="sync__skip">';
-            echo '<input type="radio" name="sync_'.$type.'['.hsc($id).']" value="0" class="syncskip" title="'.$this->getLang('keep').'" '.(($dir == 0)?'checked="checked"':'').' />';
+            echo '<input type="radio" name="'.$fieldname.'" value="0" class="syncskip" title="'.$this->getLang('keep').'" '.(($dir == 0)?'checked="checked"':'').' />';
             echo '</td>';
             echo '<td class="sync__pull">';
-            if(!isset($item['remote'])){
-                echo '<input type="radio" name="sync_'.$type.'['.hsc($id).']" value="-2" class="syncpull" title="'.$this->getLang('pulldel').'" '.(($dir == -2)?'checked="checked"':'').' />';
+            if(!$hasRemote){
+                echo '<input type="radio" name="'.$fieldname.'" value="-2" class="syncpull" title="'.$this->getLang('pulldel').'" '.(($dir == -2)?'checked="checked"':'').' />';
             }else{
-                echo '<input type="radio" name="sync_'.$type.'['.hsc($id).']" value="-1" class="syncpull" title="'.$this->getLang('pull').'" '.(($dir == -1)?'checked="checked"':'').' />';
+                echo '<input type="radio" name="'.$fieldname.'" value="-1" class="syncpull" title="'.$this->getLang('pull').'" '.(($dir == -1)?'checked="checked"':'').' />';
             }
             echo '</td>';
 
             echo '<td class="sync__remote">';
-            if(!isset($item['remote'])){
+            if(!$hasRemote){
                 echo '&mdash;';
             }else{
-                echo '<div>'.strftime($conf['dformat'],$item['remote']['mtime']).'</div>';
-                echo ' <div>('.$item['remote']['size'].' bytes)</div>';
+                echo '<div>'.hsc(dformat($rmtime)).'</div>';
+                echo ' <div>('.(int) ($item['remote']['size'] ?? 0).' bytes)</div>';
             }
             echo '</td>';
 
             echo '<td class="sync__diff">';
             if($type == 'pages'){
-                echo '<a href="'.DOKU_BASE.'lib/plugins/sync/diff.php?id='.$id.'&amp;no='.$no.'" target="_blank" class="sync_popup">'.$this->getLang('diff').'</a>';
+                echo '<a href="'.DOKU_BASE.'lib/plugins/sync/diff.php?id='.rawurlencode($id).'&amp;no='.rawurlencode((string) $no).'" target="_blank" class="sync_popup">'.$this->getLang('diff').'</a>';
             }
             echo '</td>';
 
@@ -623,17 +749,19 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
 
     /**
      * Get the local and remote time
+     *
+     * @return array (localtime, remotetime) - both 0 on failure
      */
     function _getTimes(){
-        if(!$this->_connect()) return false;
+        if(!$this->_connect()) return array(0,0);
         // get remote time
         $ok = $this->client->query('dokuwiki.getTime');
         if(!$ok){
             msg('Failed to fetch remote time. '.
-                $this->client->getErrorMessage(),-1);
-            return false;
+                hsc($this->client->getErrorMessage()),-1);
+            return array(0,0);
         }
-        $rtime = $this->client->getResponse();
+        $rtime = (int) $this->client->getResponse();
         $ltime = time();
         return array($ltime,$rtime);
     }
@@ -644,28 +772,29 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
     function _getSyncList($type='pages'){
         if(!$this->_connect()) return array();
         global $conf;
-        $no = $this->profno;
         $list = array();
-        $ns = $this->profiles[$no]['ns'];
+        $ns = (string) $this->_prf('ns', '');
+        $depth = (int) $this->_prf('depth', 0);
 
         // get remote file list
         if($type == 'pages'){
             $ok = $this->client->query('dokuwiki.getPagelist',$ns,
-                    array('depth' => (int) $this->profiles[$no]['depth'],
+                    array('depth' => $depth,
                           'hash' => true));
         }else{
             $ok = $this->client->query('wiki.getAttachments',$ns,
-                    array('depth' => (int) $this->profiles[$no]['depth'],
+                    array('depth' => $depth,
                           'hash' => true));
         }
         if(!$ok){
             msg('Failed to fetch remote file list. '.
-                $this->client->getErrorMessage(),-1);
+                hsc($this->client->getErrorMessage()),-1);
             return false;
         }
         $remote = $this->client->getResponse();
         // put into synclist
-        foreach($remote as $item){
+        foreach((array) $remote as $item){
+            if(!is_array($item) || !isset($item['id'])) continue;
             $list[$item['id']]['remote'] = $item;
             unset($list[$item['id']]['remote']['id']);
         }
@@ -677,24 +806,27 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         require_once(DOKU_INC.'inc/search.php');
         if($type == 'pages'){
             search($local, $conf['datadir'], 'search_allpages',
-                    array('depth' => (int) $this->profiles[$no]['depth'],
+                    array('depth' => $depth,
                           'hash' => true), $dir);
         }else{
             search($local, $conf['mediadir'], 'search_media',
-                    array('depth' => (int) $this->profiles[$no]['depth'],
+                    array('depth' => $depth,
                           'hash' => true), $dir);
         }
 
         // put into synclist
         foreach($local as $item){
+            if(!isset($item['id'])) continue;
+            $id = $item['id'];
             // skip identical files
-            if($list[$item['id']]['remote']['hash'] == $item['hash']){
-                unset($list[$item['id']]);
+            if(isset($list[$id]['remote']['hash'], $item['hash']) &&
+               $list[$id]['remote']['hash'] == $item['hash']){
+                unset($list[$id]);
                 continue;
             }
 
-            $list[$item['id']]['local'] = $item;
-            unset($list[$item['id']]['local']['id']);
+            $list[$id]['local'] = $item;
+            unset($list[$id]['local']['id']);
         }
         unset($local);
 
@@ -707,7 +839,6 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function _diff($id){
         if(!$this->_connect()) return false;
-        $no = $this->profno;
 
         $ok = $this->client->query('wiki.getPage',$id);
         if(!$ok){
@@ -715,8 +846,8 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             echo hsc($this->client->getErrorMessage());
             die();
         }
-        $remote = $this->client->getResponse();
-        $local  = rawWiki($id);
+        $remote = (string) $this->client->getResponse();
+        $local  = (string) rawWiki($id);
 
         $df = new Diff(explode("\n",htmlspecialchars($local)),
                        explode("\n",htmlspecialchars($remote)));
@@ -729,6 +860,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         echo '</tr>';
         echo $tdf->format($df);
         echo '</table>';
+        return true;
     }
 }
 //Setup VIM: ex: et ts=4 enc=utf-8 :

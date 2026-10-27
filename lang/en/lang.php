@@ -60,3 +60,7 @@ $lang['keep']    = 'Skip this file and keep both revisions as is.';
 
 $lang['syncdone'] = 'Synchronization finished.';
 $lang['timeout'] = 'Timeout';
+$lang['readonly'] = 'Read only (never modify the remote wiki)';
+$lang['readonlyshort'] = 'read only';
+$lang['readonlyinfo'] = 'Only changes from the remote wiki are copied into the local wiki. Read permissions on the remote wiki are sufficient.';
+$lang['readonlyskip'] = 'Read-only profile, not uploaded:';

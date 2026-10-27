@@ -5,6 +5,7 @@
  * 
  * @author Dominik Eckelmann <deckelmann@gmail.com>
  * @author Andreas Gohr <andi@splitbrain.org>
+ * @author Christoph Ziehr <info@einsatzleiterwiki.de>
  */
 $lang['menu']                  = 'Wikis abgleichen';
 $lang['syncstart']             = 'Abgleich starten';
@@ -56,3 +57,7 @@ $lang['pulldel']               = 'Lösche die lokale Version.';
 $lang['keep']                  = 'Überspringe diese Datei und behalte beide Versionen bei.';
 $lang['syncdone']              = 'Abgleich abgeschlossen.';
 $lang['timeout']               = 'Timeout';
+$lang['readonly']              = 'Nur lesen (entferntes Wiki wird nie verändert)';
+$lang['readonlyshort']         = 'nur lesen';
+$lang['readonlyinfo']          = 'Es werden nur Änderungen aus dem entfernten Wiki ins lokale Wiki übernommen. Dafür genügen Leserechte im entfernten Wiki.';
+$lang['readonlyskip']          = 'Nur-Lesen-Profil, nicht hochgeladen:';
