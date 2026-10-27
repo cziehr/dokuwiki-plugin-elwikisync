@@ -675,8 +675,8 @@ class admin_plugin_elwikisync extends DokuWiki_Admin_Plugin {
         foreach($synclist as $id => $item){
             $hasLocal  = isset($item['local']);
             $hasRemote = isset($item['remote']);
-            $lmtime = $hasLocal  ? (int) ($item['local']['mtime'] ?? 0)  : 0;
-            $rmtime = $hasRemote ? (int) ($item['remote']['mtime'] ?? 0) : 0;
+            $lmtime = $hasLocal  ? $this->_toTimestamp($item['local']['mtime'] ?? 0)  : 0;
+            $rmtime = $hasRemote ? $this->_toTimestamp($item['remote']['mtime'] ?? 0) : 0;
 
             // check direction
             $dir = 0;
@@ -754,6 +754,28 @@ class admin_plugin_elwikisync extends DokuWiki_Admin_Plugin {
     }
 
     /**
+     * Convert a time value returned by the remote API into a unix timestamp
+     *
+     * Depending on the remote DokuWiki version, times are returned as int,
+     * as numeric string, as ISO 8601 string or as XML-RPC date object
+     * (IXR_Date / IXR\DataType\Date).
+     *
+     * @param mixed $value
+     * @return int
+     */
+    protected function _toTimestamp($value){
+        if(is_int($value)) return $value;
+        if(is_numeric($value)) return (int) $value;
+        if($value instanceof \DateTimeInterface) return $value->getTimestamp();
+        if(is_object($value) && method_exists($value, 'getTimeStamp')) return (int) $value->getTimeStamp();
+        if(is_string($value) && $value !== ''){
+            $ts = strtotime($value);
+            return ($ts === false) ? 0 : $ts;
+        }
+        return 0;
+    }
+
+    /**
      * Get the local and remote time
      *
      * @return array (localtime, remotetime) - both 0 on failure
@@ -767,7 +789,7 @@ class admin_plugin_elwikisync extends DokuWiki_Admin_Plugin {
                 hsc($this->client->getErrorMessage()),-1);
             return array(0,0);
         }
-        $rtime = (int) $this->client->getResponse();
+        $rtime = $this->_toTimestamp($this->client->getResponse());
         $ltime = time();
         return array($ltime,$rtime);
     }
