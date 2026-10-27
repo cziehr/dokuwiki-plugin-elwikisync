@@ -1,7 +1,7 @@
-base   sync
-author Andreas Gohr
-email  andi@splitbrain.org
+base   elwikisync
+author Christoph Ziehr (based on the sync plugin by Andreas Gohr)
+email  info@einsatzleiterwiki.de
 date   2026-10-27
-name   DokuWiki Synchronization Plugin
-desc   Syncs a namespace with a remote wiki on request
-url    http://www.dokuwiki.org/plugin:sync
+name   ELWiki Synchronization Plugin
+desc   Syncs a namespace with a remote wiki on request (fork of the sync plugin, PHP 8 ready, read-only mode)
+url    https://github.com/cziehr/dokuwiki-plugin-elwikisync

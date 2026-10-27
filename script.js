@@ -2,7 +2,7 @@ jQuery(function(){
     /**
      * Attach diff popup
      */
-    jQuery('a[class=sync_popup]').click(function(e){ 
+    jQuery('a[class=elwikisync_popup]').click(function(e){ 
             window.open(jQuery(this).attr("href"),'diff',"width=700,height=500,left=100,top=100,menubar=no,location=no,resizable=yes,scrollbars=yes,status=no,toolbar=no");
             e.preventDefault();
             return false;
@@ -11,14 +11,14 @@ jQuery(function(){
     /**
      * Attach the select all actions
      */
-    jQuery('#sync__push').click(function(){ sync_select('push'); }).addClass('sync__action');
-    jQuery('#sync__skip').click(function(){ sync_select('skip'); }).addClass('sync__action');
-    jQuery('#sync__pull').click(function(){ sync_select('pull'); }).addClass('sync__action');
+    jQuery('#elwikisync__push').click(function(){ elwikisync_select('push'); }).addClass('elwikisync__action');
+    jQuery('#elwikisync__skip').click(function(){ elwikisync_select('skip'); }).addClass('elwikisync__action');
+    jQuery('#elwikisync__pull').click(function(){ elwikisync_select('pull'); }).addClass('elwikisync__action');
 });
 
 /**
  * Check all radio buttons of the given type
  */
-function sync_select(type){
-     jQuery('input[class=sync'+type+']').prop('checked',true);
+function elwikisync_select(type){
+     jQuery('input[class=elwikisync'+type+']').prop('checked',true);
 }

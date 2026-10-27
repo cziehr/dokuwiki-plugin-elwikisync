@@ -1,102 +1,102 @@
-div.dokuwiki div.sync_left {
+div.dokuwiki div.elwikisync_left {
     float: left;
 }
 
-div.dokuwiki div.sync_left div.error {
+div.dokuwiki div.elwikisync_left div.error {
     width: 25em;
     padding: 4px 8px 4px 25px;
 }
 
-div.dokuwiki form.sync_profile fieldset{
+div.dokuwiki form.elwikisync_profile fieldset{
     text-align: left;
 }
 
-div.dokuwiki form.sync_profile samp {
+div.dokuwiki form.elwikisync_profile samp {
     font-size: small;
     display: block;
     margin-left: 4em;
 }
 
-div.dokuwiki form.sync_profile label,
-div.dokuwiki form.sync_profile span {
+div.dokuwiki form.elwikisync_profile label,
+div.dokuwiki form.elwikisync_profile span {
     display: block;
 }
 
-div.dokuwiki form.sync_profile input.edit,
-div.dokuwiki form.sync_profile select.edit {
+div.dokuwiki form.elwikisync_profile input.edit,
+div.dokuwiki form.elwikisync_profile select.edit {
     width: 25em;
     display: block;
     margin-left: 2em;
 }
 
-div.dokuwiki form.sync_profile fieldset div.type {
+div.dokuwiki form.elwikisync_profile fieldset div.type {
     margin-left: 2em;
 }
-div.dokuwiki form.sync_profile fieldset div.type label{
+div.dokuwiki form.elwikisync_profile fieldset div.type label{
     display: inline;
 }
 
-div.dokuwiki form.sync_profile fieldset div.submit {
+div.dokuwiki form.elwikisync_profile fieldset div.submit {
     margin-top: 1em;
     text-align: center;
 }
 
-div.dokuwiki form.sync_profile fieldset div small {
+div.dokuwiki form.elwikisync_profile fieldset div small {
     display: block;
 }
 
-div.dokuwiki ul.sync li.skipped {
+div.dokuwiki ul.elwikisync li.skipped {
     list-style-image: url(pix/skipped.png);
 }
 
-div.dokuwiki ul.sync li.del_okay {
+div.dokuwiki ul.elwikisync li.del_okay {
     list-style-image: url(pix/del_okay.png);
 }
 
-div.dokuwiki ul.sync li.del_fail {
+div.dokuwiki ul.elwikisync li.del_fail {
     list-style-image: url(pix/del_fail.png);
 }
 
-div.dokuwiki ul.sync li.push_okay {
+div.dokuwiki ul.elwikisync li.push_okay {
     list-style-image: url(pix/right_okay.png);
 }
 
-div.dokuwiki ul.sync li.push_fail {
+div.dokuwiki ul.elwikisync li.push_fail {
     list-style-image: url(pix/right_fail.png);
 }
 
-div.dokuwiki ul.sync li.pull_okay {
+div.dokuwiki ul.elwikisync li.pull_okay {
     list-style-image: url(pix/left_okay.png);
 }
 
-div.dokuwiki ul.sync li.pull_fail {
+div.dokuwiki ul.elwikisync li.pull_fail {
     list-style-image: url(pix/right_fail.png);
 }
 
-th.sync__action{
+th.elwikisync__action{
     cursor: pointer;
 }
 
-#sync__direction__table {
+#elwikisync__direction__table {
 	table-layout: fixed;
 	width: 100%;
 }
 
-#sync__direction__table .sync__file {
+#elwikisync__direction__table .elwikisync__file {
 	width: 50%;
 }
 
-#sync__direction__table .sync__push,
-#sync__direction__table .sync__skip,
-#sync__direction__table .sync__pull {
+#elwikisync__direction__table .elwikisync__push,
+#elwikisync__direction__table .elwikisync__skip,
+#elwikisync__direction__table .elwikisync__pull {
 	width: 3%;
 }
 
 
-div.dokuwiki form.sync_profile fieldset div.readonly {
+div.dokuwiki form.elwikisync_profile fieldset div.readonly {
     margin-left: 2em;
     margin-top: 0.5em;
 }
-div.dokuwiki form.sync_profile fieldset div.readonly label {
+div.dokuwiki form.elwikisync_profile fieldset div.readonly label {
     display: inline;
 }

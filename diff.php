@@ -1,6 +1,6 @@
 <?php
 /**
- * Sync plugin - diff popup
+ * elwikisync plugin - diff popup
  *
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     Andreas Gohr <gohr@cosmocode.de>
@@ -18,7 +18,7 @@ if(!auth_isadmin()) die('not you my friend!');
 
 $id = cleanID((string) ($_REQUEST['id'] ?? ''));
 if($id === '') die('no page id given');
-$plugin = new admin_plugin_sync();
+$plugin = new admin_plugin_elwikisync();
 header('Content-Type: text/html; charset=utf-8');
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"

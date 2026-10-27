@@ -7,7 +7,7 @@
  * @author Andreas Gohr <andi@splitbrain.org>
  * @author Christoph Ziehr <info@einsatzleiterwiki.de>
  */
-$lang['menu']                  = 'Wikis abgleichen';
+$lang['menu']                  = 'Einsatzleiterwiki-Inhalte synchronisieren';
 $lang['syncstart']             = 'Abgleich starten';
 $lang['lastsync']              = 'Letzter Abgleich:';
 $lang['remotever']             = 'Entfernte Wiki Version:';

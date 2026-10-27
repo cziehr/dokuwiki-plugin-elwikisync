@@ -4,7 +4,7 @@
  * All DokuWiki plugins to extend the admin function
  * need to inherit from this class
  */
-class admin_plugin_sync extends DokuWiki_Admin_Plugin {
+class admin_plugin_elwikisync extends DokuWiki_Admin_Plugin {
 
     protected $profiles = array();
     protected $profno = '';
@@ -112,12 +112,12 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function handle() {
         if(isset($_REQUEST['prf']) && is_array($_REQUEST['prf'])){
-            if(isset($_REQUEST['sync__delete']) && $this->profno !== ''){
+            if(isset($_REQUEST['elwikisync__delete']) && $this->profno !== ''){
                 // delete profile
                 unset($this->profiles[$this->profno]);
                 $this->profiles = array_values($this->profiles); //reindex
                 $this->profno = '';
-            }elseif(isset($_REQUEST['sync__delete'])){
+            }elseif(isset($_REQUEST['elwikisync__delete'])){
                 // delete clicked on the "new profile" form - nothing to do
                 return;
             }else{
@@ -141,8 +141,8 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      * output appropriate html
      */
     function html() {
-        $syncPages = (isset($_POST['sync_pages']) && is_array($_POST['sync_pages'])) ? $_POST['sync_pages'] : array();
-        $syncMedia = (isset($_POST['sync_media']) && is_array($_POST['sync_media'])) ? $_POST['sync_media'] : array();
+        $syncPages = (isset($_POST['elwikisync_pages']) && is_array($_POST['elwikisync_pages'])) ? $_POST['elwikisync_pages'] : array();
+        $syncMedia = (isset($_POST['elwikisync_media']) && is_array($_POST['elwikisync_media'])) ? $_POST['elwikisync_media'] : array();
 
         if((count($syncPages) || count($syncMedia)) && $this->profno!==''){
             // do the sync
@@ -156,7 +156,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             echo '<br /></div>'.NL;
             $this->_flush();
 
-            echo '<ul class="sync">';
+            echo '<ul class="elwikisync">';
 
             if(count($syncPages)){
                 $this->_sync($syncPages,'pages');
@@ -210,14 +210,14 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         }else{
             echo $this->locale_xhtml('intro');
 
-            echo '<div class="sync_left">';
+            echo '<div class="elwikisync_left">';
             $this->_profilelist($this->profno);
             if($this->profno !=='' ){
                 echo '<br />';
                 $this->_profileView($this->profno);
             }
             echo '</div>';
-            echo '<div class="sync_right">';
+            echo '<div class="elwikisync_right">';
             $this->_profileform($this->profno);
             echo '</div>';
         }
@@ -229,7 +229,13 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
     function _profileLoad(){
         global $conf;
         $this->profiles = array();
-        $profiles = $conf['metadir'].'/sync.profiles';
+        $profiles = $conf['metadir'].'/elwikisync.profiles';
+        if(!file_exists($profiles)){
+            // first run: take over the profiles of the original sync plugin (read only,
+            // the original file is never modified - ours is written on the next save)
+            $legacy = $conf['metadir'].'/sync.profiles';
+            if(file_exists($legacy)) $profiles = $legacy;
+        }
         if(file_exists($profiles)){
             // a serialized array always ends with "}" - trailing whitespace
             // (e.g. a newline added by an editor) would make unserialize() complain
@@ -238,7 +244,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             if(is_array($data)){
                 $this->profiles = $data;
             }else{
-                msg('sync plugin: could not read '.hsc($profiles).' - file is damaged',-1);
+                msg('elwikisync plugin: could not read '.hsc($profiles).' - file is damaged',-1);
             }
         }
     }
@@ -248,7 +254,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
      */
     function _profileSave(){
         global $conf;
-        $profiles = $conf['metadir'].'/sync.profiles';
+        $profiles = $conf['metadir'].'/elwikisync.profiles';
         io_saveFile($profiles,serialize($this->profiles));
     }
 
@@ -330,7 +336,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         $ltime   = (int) $this->_prf('ltime', 0, $no);
         $readonly = $this->_isReadonly($no);
 
-        echo '<form action="" method="post" class="sync_profile">';
+        echo '<form action="" method="post" class="elwikisync_profile">';
         echo '<fieldset><legend>';
         if($no !== ''){
             echo $this->getLang('edit');
@@ -341,42 +347,42 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
 
         echo '<input type="hidden" name="no" value="'.hsc($no).'" />';
 
-        echo '<label for="sync__server">'.$this->getLang('server').'</label> ';
-        echo '<input type="text" name="prf[server]" id="sync__server" class="edit" value="'.hsc($server).'" />';
+        echo '<label for="elwikisync__server">'.$this->getLang('server').'</label> ';
+        echo '<input type="text" name="prf[server]" id="elwikisync__server" class="edit" value="'.hsc($server).'" />';
         echo '<samp>http://example.com/dokuwiki/lib/exe/xmlrpc.php</samp>';
 
-        echo '<label for="sync__ns">'.$this->getLang('ns').'</label> ';
-        echo '<input type="text" name="prf[ns]" id="sync__ns" class="edit" value="'.hsc($ns).'" />';
+        echo '<label for="elwikisync__ns">'.$this->getLang('ns').'</label> ';
+        echo '<input type="text" name="prf[ns]" id="elwikisync__ns" class="edit" value="'.hsc($ns).'" />';
 
-        echo '<label for="sync__depth">'.$this->getLang('depth').'</label> ';
-        echo '<select name="prf[depth]" id="sync__depth" class="edit">';
+        echo '<label for="elwikisync__depth">'.$this->getLang('depth').'</label> ';
+        echo '<select name="prf[depth]" id="elwikisync__depth" class="edit">';
         for($i = 0; $i <= 3; $i++){
             echo '<option value="'.$i.'" '.(($depth == $i)?'selected="selected"':'').'>'.$this->getLang('level'.$i).'</option>';
         }
         echo '</select>';
 
 
-        echo '<label for="sync__user">'.$this->getLang('user').'</label> ';
-        echo '<input type="text" name="prf[user]" id="sync__user" class="edit" value="'.hsc($user).'" />';
+        echo '<label for="elwikisync__user">'.$this->getLang('user').'</label> ';
+        echo '<input type="text" name="prf[user]" id="elwikisync__user" class="edit" value="'.hsc($user).'" />';
 
-        echo '<label for="sync__pass">'.$this->getLang('pass').'</label> ';
-        echo '<input type="password" name="prf[pass]" id="sync__pass" class="edit" value="'.hsc($pass).'" />';
+        echo '<label for="elwikisync__pass">'.$this->getLang('pass').'</label> ';
+        echo '<input type="password" name="prf[pass]" id="elwikisync__pass" class="edit" value="'.hsc($pass).'" />';
 
-        echo '<label for="sync__timeout">'.$this->getLang('timeout').'</label>';
-        echo '<input type="number" name="prf[timeout]" id="sync__timeout" class="edit" value="'.hsc((string) $timeout).'" />';
+        echo '<label for="elwikisync__timeout">'.$this->getLang('timeout').'</label>';
+        echo '<input type="number" name="prf[timeout]" id="elwikisync__timeout" class="edit" value="'.hsc((string) $timeout).'" />';
 
         echo '<span>'.$this->getLang('type').'</span>';
 
         echo '<div class="type">';
         for($i = 0; $i <= 2; $i++){
-            echo '<input type="radio" name="prf[type]" id="sync__type'.$i.'" value="'.$i.'" '.(($type == $i)?'checked="checked"':'').'/>';
-            echo '<label for="sync__type'.$i.'">'.$this->getLang('type'.$i).'</label> ';
+            echo '<input type="radio" name="prf[type]" id="elwikisync__type'.$i.'" value="'.$i.'" '.(($type == $i)?'checked="checked"':'').'/>';
+            echo '<label for="elwikisync__type'.$i.'">'.$this->getLang('type'.$i).'</label> ';
         }
         echo '</div>';
 
         echo '<div class="readonly">';
-        echo '<input type="checkbox" name="prf[readonly]" id="sync__readonly" value="1" '.($readonly?'checked="checked"':'').'/>';
-        echo '<label for="sync__readonly">'.$this->getLang('readonly').'</label>';
+        echo '<input type="checkbox" name="prf[readonly]" id="elwikisync__readonly" value="1" '.($readonly?'checked="checked"':'').'/>';
+        echo '<label for="elwikisync__readonly">'.$this->getLang('readonly').'</label>';
         echo '<small>'.$this->getLang('readonlyinfo').'</small>';
         echo '</div>';
 
@@ -390,7 +396,7 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
 
         if($no !== ''){
             echo '<div class="submit">';
-            echo '<input name="sync__delete" type="submit" value="'.$this->getLang('delete').'" class="button" />';
+            echo '<input name="elwikisync__delete" type="submit" value="'.$this->getLang('delete').'" class="button" />';
             echo '</div>';
         }
 
@@ -628,15 +634,15 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
         echo '<input type="hidden" name="lnow" value="'.hsc((string) $lnow).'" />';
         echo '<input type="hidden" name="rnow" value="'.hsc((string) $rnow).'" />';
         echo '<input type="hidden" name="no" value="'.hsc((string) $no).'" />';
-        echo '<table class="inline" id="sync__direction__table">';
+        echo '<table class="inline" id="elwikisync__direction__table">';
         echo '<tr>
-                <th class="sync__file">'.$this->getLang('file').'</th>
-                <th class="sync__local">'.$this->getLang('local').'</th>
-                <th class="sync__push" id="sync__push">&gt;</th>
-                <th class="sync__skip" id="sync__skip">=</th>
-                <th class="sync__pull" id="sync__pull">&lt;</th>
-                <th class="sync__remote">'.$this->getLang('remote').'</th>
-                <th class="sync__diff">'.$this->getLang('diff').'</th>
+                <th class="elwikisync__file">'.$this->getLang('file').'</th>
+                <th class="elwikisync__local">'.$this->getLang('local').'</th>
+                <th class="elwikisync__push" id="elwikisync__push">&gt;</th>
+                <th class="elwikisync__skip" id="elwikisync__skip">=</th>
+                <th class="elwikisync__pull" id="elwikisync__pull">&lt;</th>
+                <th class="elwikisync__remote">'.$this->getLang('remote').'</th>
+                <th class="elwikisync__diff">'.$this->getLang('diff').'</th>
               </tr>';
     }
 
@@ -694,12 +700,12 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             // read-only: never suggest writing to the remote wiki
             if($readonly && $dir > 0) $dir = 0;
 
-            $fieldname = 'sync_'.$type.'['.hsc($id).']';
+            $fieldname = 'elwikisync_'.$type.'['.hsc($id).']';
 
             echo '<tr>';
 
-            echo '<td class="sync__file">'.hsc($id).'</td>';
-            echo '<td class="sync__local">';
+            echo '<td class="elwikisync__file">'.hsc($id).'</td>';
+            echo '<td class="elwikisync__local">';
             if(!$hasLocal){
                 echo '&mdash;';
             }else{
@@ -708,27 +714,27 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             }
             echo '</td>';
 
-            echo '<td class="sync__push">';
+            echo '<td class="elwikisync__push">';
             if($readonly){
                 echo '<span title="'.hsc($this->getLang('readonly')).'">&ndash;</span>';
             }elseif(!$hasLocal){
-                echo '<input type="radio" name="'.$fieldname.'" value="2" class="syncpush" title="'.$this->getLang('pushdel').'" '.(($dir == 2)?'checked="checked"':'').' />';
+                echo '<input type="radio" name="'.$fieldname.'" value="2" class="elwikisyncpush" title="'.$this->getLang('pushdel').'" '.(($dir == 2)?'checked="checked"':'').' />';
             }else{
-                echo '<input type="radio" name="'.$fieldname.'" value="1" class="syncpush" title="'.$this->getLang('push').'" '.(($dir == 1)?'checked="checked"':'').' />';
+                echo '<input type="radio" name="'.$fieldname.'" value="1" class="elwikisyncpush" title="'.$this->getLang('push').'" '.(($dir == 1)?'checked="checked"':'').' />';
             }
             echo '</td>';
-            echo '<td class="sync__skip">';
-            echo '<input type="radio" name="'.$fieldname.'" value="0" class="syncskip" title="'.$this->getLang('keep').'" '.(($dir == 0)?'checked="checked"':'').' />';
+            echo '<td class="elwikisync__skip">';
+            echo '<input type="radio" name="'.$fieldname.'" value="0" class="elwikisyncskip" title="'.$this->getLang('keep').'" '.(($dir == 0)?'checked="checked"':'').' />';
             echo '</td>';
-            echo '<td class="sync__pull">';
+            echo '<td class="elwikisync__pull">';
             if(!$hasRemote){
-                echo '<input type="radio" name="'.$fieldname.'" value="-2" class="syncpull" title="'.$this->getLang('pulldel').'" '.(($dir == -2)?'checked="checked"':'').' />';
+                echo '<input type="radio" name="'.$fieldname.'" value="-2" class="elwikisyncpull" title="'.$this->getLang('pulldel').'" '.(($dir == -2)?'checked="checked"':'').' />';
             }else{
-                echo '<input type="radio" name="'.$fieldname.'" value="-1" class="syncpull" title="'.$this->getLang('pull').'" '.(($dir == -1)?'checked="checked"':'').' />';
+                echo '<input type="radio" name="'.$fieldname.'" value="-1" class="elwikisyncpull" title="'.$this->getLang('pull').'" '.(($dir == -1)?'checked="checked"':'').' />';
             }
             echo '</td>';
 
-            echo '<td class="sync__remote">';
+            echo '<td class="elwikisync__remote">';
             if(!$hasRemote){
                 echo '&mdash;';
             }else{
@@ -737,9 +743,9 @@ class admin_plugin_sync extends DokuWiki_Admin_Plugin {
             }
             echo '</td>';
 
-            echo '<td class="sync__diff">';
+            echo '<td class="elwikisync__diff">';
             if($type == 'pages'){
-                echo '<a href="'.DOKU_BASE.'lib/plugins/sync/diff.php?id='.rawurlencode($id).'&amp;no='.rawurlencode((string) $no).'" target="_blank" class="sync_popup">'.$this->getLang('diff').'</a>';
+                echo '<a href="'.DOKU_BASE.'lib/plugins/elwikisync/diff.php?id='.rawurlencode($id).'&amp;no='.rawurlencode((string) $no).'" target="_blank" class="elwikisync_popup">'.$this->getLang('diff').'</a>';
             }
             echo '</td>';
 
