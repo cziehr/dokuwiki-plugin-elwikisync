@@ -59,7 +59,7 @@ class admin_plugin_elwikisync extends DokuWiki_Admin_Plugin {
 
         $server = $this->_prf('server');
         if(class_exists('IXR_Client')) {
-            $this->client = new IXR_Client($server, false, 80, $timeout);
+            $this->client = new \dokuwiki\Remote\IXR\Client($server, false, 80, $timeout);
         }
         else {
             $this->client = new dokuwiki\Remote\IXR\Client($server);
