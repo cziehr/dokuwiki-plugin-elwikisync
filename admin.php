@@ -548,7 +548,16 @@ class admin_plugin_elwikisync extends DokuWiki_Admin_Plugin {
                 $data = $this->client->getResponse();
                 if($type == 'pages'){
                     saveWikiText($id,(string) $data,$sum,false);
-                    idx_addPage($id);
+                    if(class_exists('\dokuwiki\Search\Indexer')){
+                        try{
+                            (new \dokuwiki\Search\Indexer())->addPage($id);
+                        }catch(\Exception $e){
+                            // Index-errors shouldn't break sync,
+                            // indexing will be done later by DokuWiki anyway
+                        }
+                    }else{
+                        idx_addPage($id); // fallback for older DokuWiki-releases
+                    }
                 }else{
                     if($this->apiversion < 7){
                         $data = base64_decode((string) $data);
